@@ -1,20 +1,28 @@
-use crate::ffmpeg::{
-    self,
-    format::{context::Input, input, Pixel},
-    media::Type,
+use crate::{
+    ffmpeg::{self, format::input},
+    message::{Frames, FramesReceiver, FramesSender},
+    video_decoder::VideoDecoder,
 };
 
-use std::{collections::HashMap, path::Path, sync::Arc};
+use tokio::sync::mpsc::unbounded_channel;
 
-use crate::message::{new_stream_channel, Message, StreamType};
+use std::{path::Path, sync::Arc};
 
-pub struct Player;
+use crate::message::{Message, MessageContainer};
+
+pub struct Player {
+    frames_reciever: FramesReceiver,
+    frames_sender: FramesSender,
+}
 
 impl Player {
-    pub fn init() -> Player {
-        ffmpeg::init().unwrap();
+    pub fn new() -> Player {
+        let (frames_sender, frames_reciever) = unbounded_channel();
 
-        Player
+        Player {
+            frames_sender,
+            frames_reciever,
+        }
     }
 
     pub fn set_path(&self, path: impl AsRef<Path>) {
@@ -22,30 +30,42 @@ impl Player {
 
         let mut ictx = input(&path).unwrap();
 
-        let (video_sender, mut video_receiver) = new_stream_channel(StreamType::Video, &ictx);
+        let mut stream_container = MessageContainer::default();
 
-        let mut senders = HashMap::new();
+        let (video_receiver, video) = stream_container.add_video_stream(&ictx);
+
+        let (frame_sender, mut frame_receiver) = unbounded_channel();
+
+        let mut video_decoder = VideoDecoder::new(video, frame_sender);
+
+        let mut frames_sender = self.frames_sender.clone();
 
         tokio::spawn(async move {
             loop {
-                if let Some(message) = video_receiver.receiver.recv().await {
-                    println!("receiver message: {:?}", message);
+                if let Ok(frame) = frame_receiver.try_recv() {
+                    println!("frame {:?}", frame);
+
+                    if let Err(e) = frames_sender.send(Frames(vec![frame])) {
+                        println!("send frames {}", e);
+                    }
                 }
             }
         });
 
-        senders.insert(video_sender.stream_index, video_sender);
+        tokio::spawn(async move {
+            video_decoder.run(video_receiver).await;
+        });
 
         tokio::spawn(async move {
             for (stream, packet) in ictx.packets() {
-                if let Some(sender) = senders.get_mut(&stream.index()) {
+                if let Some(sender) = stream_container.get_mut(&stream.index()) {
                     if let Err(e) = sender.sender.send(Message::Packet(Arc::new(packet))) {
                         println!("sender error: {}", e);
                     }
                 }
             }
 
-            for sender in senders.values_mut() {
+            for sender in stream_container.values_mut() {
                 if let Err(e) = sender.sender.send(Message::End) {
                     println!("sender error: {}", e);
                 }

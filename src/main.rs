@@ -1,8 +1,10 @@
-use rplayer::player::Player;
+use rplayer::{ffmpeg, player::Player};
 
 #[tokio::main]
 async fn main() {
-    let player = Player::init();
+    ffmpeg::init().unwrap();
+
+    let player = Player::new();
 
     player.set_path("./test.mkv");
 

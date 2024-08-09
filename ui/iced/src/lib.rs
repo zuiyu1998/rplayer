@@ -39,7 +39,7 @@ pub fn run_player(path: PathBuf) -> Subscription<PlayerEvent> {
                             player_state = player.recv() => {
                                 handle_player_state(player_state, &mut output).await;
                             }
-                            Some(command) = receiver.recv() => {
+                            Some(_command) = receiver.recv() => {
 
                             }
                         }

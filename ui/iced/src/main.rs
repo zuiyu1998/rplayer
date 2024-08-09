@@ -1,10 +1,9 @@
 use std::env;
 
-use iced::alignment::{self, Alignment};
 use iced::executor;
 use iced::widget::image::Handle;
-use iced::widget::{button, column, container, row, scrollable, text, text_input, Image};
-use iced::{Application, Color, Command, Element, Length, Settings, Subscription, Theme};
+use iced::widget::{container, text, Image};
+use iced::{Application, Command, Element, Length, Settings, Subscription, Theme};
 use iced_impl::{run_player, PlayerCommandSender, PlayerEvent};
 use rplayer::message::Frames;
 

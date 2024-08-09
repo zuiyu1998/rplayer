@@ -18,8 +18,18 @@ pub type FrameReceiver = UnboundedReceiver<Frame>;
 pub type FramesSender = UnboundedSender<Frames>;
 pub type FramesReceiver = UnboundedReceiver<Frames>;
 
-pub struct Frames(pub Vec<Frame>);
+#[derive(Default, Clone, Debug)]
+pub struct Frames(pub HashMap<StreamType, Frame>);
 
+impl Frames {
+    pub fn video_bytes(&self) -> Option<&[u8]> {
+        self.0
+            .get(&StreamType::Video)
+            .and_then(|frame| Some(frame.as_bytes()))
+    }
+}
+
+#[derive(Clone)]
 pub enum Frame {
     VideoFrame(Arc<VideoFrame>),
 }
@@ -54,7 +64,7 @@ impl Debug for Message {
     }
 }
 
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 pub enum StreamType {
     Video,
 }

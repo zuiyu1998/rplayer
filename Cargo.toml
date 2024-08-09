@@ -3,6 +3,10 @@ name = "rplayer"
 version = "0.1.0"
 edition = "2021"
 
+[workspace]
+members = [".", "ui/iced"]
+
+
 [dependencies]
 ffmpeg-next = { version = "7.0" }
 tokio = { version = "1.39", features = ["full"] }

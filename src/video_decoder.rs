@@ -22,6 +22,8 @@ unsafe impl Send for Scaler {}
 
 impl VideoDecoder {
     pub fn new(decoder: Decoder, frame_sender: FrameSender) -> Self {
+        println!("{}, {}", decoder.width(), decoder.height());
+
         let scaler = Scaler(
             Context::get(
                 decoder.format(),

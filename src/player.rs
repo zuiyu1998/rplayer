@@ -1,14 +1,20 @@
 use crate::{
-    ffmpeg::{self, format::input},
-    message::{Frames, FramesReceiver, FramesSender},
+    ffmpeg::format::input,
+    message::{Frames, FramesReceiver, FramesSender, StreamType},
     video_decoder::VideoDecoder,
 };
 
-use tokio::sync::mpsc::unbounded_channel;
+use tokio::sync::mpsc::{error::TryRecvError, unbounded_channel};
 
 use std::{path::Path, sync::Arc};
 
 use crate::message::{Message, MessageContainer};
+
+pub enum PlayerState {
+    Ready,
+    Frames(Frames),
+    End,
+}
 
 pub struct Player {
     frames_reciever: FramesReceiver,
@@ -25,6 +31,19 @@ impl Player {
         }
     }
 
+    pub async fn recv(&mut self) -> PlayerState {
+        match self.frames_reciever.try_recv() {
+            Ok(frames) => PlayerState::Frames(frames),
+            Err(e) => {
+                if e == TryRecvError::Empty {
+                    PlayerState::Ready
+                } else {
+                    PlayerState::End
+                }
+            }
+        }
+    }
+
     pub fn set_path(&self, path: impl AsRef<Path>) {
         let path = path.as_ref().to_path_buf();
 
@@ -38,15 +57,19 @@ impl Player {
 
         let mut video_decoder = VideoDecoder::new(video, frame_sender);
 
-        let mut frames_sender = self.frames_sender.clone();
+        let frames_sender = self.frames_sender.clone();
 
         tokio::spawn(async move {
             loop {
                 if let Ok(frame) = frame_receiver.try_recv() {
                     println!("frame {:?}", frame);
 
-                    if let Err(e) = frames_sender.send(Frames(vec![frame])) {
-                        println!("send frames {}", e);
+                    let mut frames = Frames::default();
+
+                    frames.0.insert(StreamType::Video, frame);
+
+                    if let Err(e) = frames_sender.send(frames) {
+                        println!("send frame error {}", e);
                     }
                 }
             }

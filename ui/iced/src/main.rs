@@ -5,6 +5,7 @@ use iced::widget::image::Handle;
 use iced::widget::{container, text, Image};
 use iced::{Application, Command, Element, Length, Settings, Subscription, Theme};
 use iced_impl::{run_player, PlayerCommandSender, PlayerEvent};
+use rplayer::helpers::convert_to_image;
 use rplayer::message::Frames;
 
 pub fn main() -> iced::Result {
@@ -69,16 +70,12 @@ impl Application for App {
                 .padding(20)
                 .into()
         } else {
-            let bytes = self
-                .image
-                .as_ref()
-                .unwrap()
-                .video_bytes()
-                .as_ref()
-                .unwrap()
-                .to_vec();
+            let video = self.image.as_ref().unwrap().get_video().unwrap();
+            let width = video.width();
+            let height = video.height();
 
-            let handle = Handle::from_pixels(1280, 720, bytes);
+            let handle = Handle::from_pixels(width, height, video.data(0).to_vec());
+
             container(Image::new(handle))
                 .height(Length::Fill)
                 .padding(20)

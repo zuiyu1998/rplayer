@@ -22,10 +22,10 @@ pub type FramesReceiver = UnboundedReceiver<Frames>;
 pub struct Frames(pub HashMap<StreamType, Frame>);
 
 impl Frames {
-    pub fn video_bytes(&self) -> Option<&[u8]> {
+    pub fn get_video(&self) -> Option<&VideoFrame> {
         self.0
             .get(&StreamType::Video)
-            .and_then(|frame| Some(frame.as_bytes()))
+            .and_then(|frame| frame.as_video())
     }
 }
 
@@ -35,9 +35,9 @@ pub enum Frame {
 }
 
 impl Frame {
-    pub fn as_bytes(&self) -> &[u8] {
+    pub fn as_video(&self) -> Option<&VideoFrame> {
         match &self {
-            Frame::VideoFrame(video) => video.data(0),
+            Frame::VideoFrame(video) => Some(&video),
         }
     }
 }

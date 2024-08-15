@@ -1,3 +1,4 @@
+pub mod frame_keep;
 pub mod message;
 pub mod player;
 pub mod video_decoder;

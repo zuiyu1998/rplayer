@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     fmt::Debug,
     ops::{Deref, DerefMut},
     sync::Arc,
@@ -10,22 +10,49 @@ use crate::ffmpeg::{
     packet::Packet,
 };
 
-use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tokio::sync::{
+    mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+    Mutex,
+};
 
 pub type FrameSender = UnboundedSender<Frame>;
 pub type FrameReceiver = UnboundedReceiver<Frame>;
 
-pub type FramesSender = UnboundedSender<Frames>;
-pub type FramesReceiver = UnboundedReceiver<Frames>;
-
 #[derive(Default, Clone, Debug)]
-pub struct Frames(pub HashMap<StreamType, Frame>);
+pub struct Buffer(HashMap<StreamType, Frame>);
 
-impl Frames {
+impl Buffer {
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn insert(&mut self, key: StreamType, frame: Frame) {
+        self.0.insert(key, frame);
+    }
+
     pub fn get_video(&self) -> Option<&VideoFrame> {
         self.0
             .get(&StreamType::Video)
             .and_then(|frame| frame.as_video())
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct Buffers(Arc<Mutex<VecDeque<Buffer>>>);
+
+impl Buffers {
+    pub fn len(&self) -> usize {
+        self.0.try_lock().unwrap().len()
+    }
+
+    pub fn pop(&self) -> Option<Buffer> {
+        let mut guard = self.0.try_lock().unwrap();
+        guard.pop_front()
+    }
+
+    pub fn push(&self, buffer: Buffer) {
+        let mut guard = self.0.try_lock().unwrap();
+        guard.push_back(buffer);
     }
 }
 
@@ -38,6 +65,12 @@ impl Frame {
     pub fn as_video(&self) -> Option<&VideoFrame> {
         match &self {
             Frame::VideoFrame(video) => Some(&video),
+        }
+    }
+
+    pub fn pts(&self) -> Option<i64> {
+        match &self {
+            Frame::VideoFrame(video) => video.pts(),
         }
     }
 }
@@ -78,9 +111,9 @@ impl StreamType {
 }
 
 #[derive(Default)]
-pub struct MessageContainer(HashMap<usize, MessageSender>);
+pub struct SenderContainer(HashMap<usize, MessageSender>);
 
-impl MessageContainer {
+impl SenderContainer {
     pub fn add_video_stream(&mut self, ictx: &Input) -> (MessageReceiver, Video) {
         let input = ictx
             .streams()
@@ -105,14 +138,30 @@ impl MessageContainer {
     }
 }
 
-impl Deref for MessageContainer {
+impl Deref for SenderContainer {
     type Target = HashMap<usize, MessageSender>;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl DerefMut for MessageContainer {
+impl DerefMut for SenderContainer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[derive(Default)]
+pub struct ReceiverContainer(HashMap<StreamType, FrameReceiver>);
+
+impl Deref for ReceiverContainer {
+    type Target = HashMap<StreamType, FrameReceiver>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ReceiverContainer {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
